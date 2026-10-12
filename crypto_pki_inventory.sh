@@ -39,17 +39,25 @@
 #     matched config lines are redacted before being recorded
 #
 # Usage:
-#   sudo ./crypto_pki_inventory.sh [SCAN_ROOT] [--with-sbom]
+#   sudo ./crypto_pki_inventory.sh [SCAN_ROOT] [--with-sbom] [--app-name NAME]
+#   ./crypto_pki_inventory.sh --report-only DIR [--app-name NAME]
 #
-#   SCAN_ROOT    Directory to scan for cert/key/keystore files.
-#                Default: / (excludes /proc,/sys,/dev,/run, container
-#                storage, and any live network-filesystem mount)
-#   --with-sbom  Also run syft/cdxgen if installed to produce a full
-#                SBOM (CycloneDX) and code-level CBOM.
+#   SCAN_ROOT       Directory to scan for cert/key/keystore files.
+#                   Default: / (excludes /proc,/sys,/dev,/run, container
+#                   storage, and any live network-filesystem mount)
+#   --with-sbom     Also run syft/cdxgen if installed to produce a full
+#                   SBOM (CycloneDX) and code-level CBOM.
+#   --app-name NAME Application name shown in the HTML report title.
+#                   Default: the hostname.
+#   --report-only DIR
+#                   Do not scan. Re-render report.html from the CSVs already
+#                   in an earlier output directory DIR.
 #
-# Output: ./crypto-inventory-<hostname>-<timestamp>/  containing CSVs + a
-#         summary.txt. Run as root (or with sudo) for full filesystem coverage
-#         — running as a normal user will silently skip unreadable paths.
+# Output: ./crypto-inventory-<hostname>-<timestamp>/  containing CSVs, a
+#         summary.txt and a self-contained report.html (no external assets,
+#         opens offline in any browser). Run as root (or with sudo) for full
+#         filesystem coverage — running as a normal user will silently skip
+#         unreadable paths.
 
 set -uo pipefail
 
@@ -58,16 +66,320 @@ set -uo pipefail
 # ---------------------------------------------------------------------------
 SCAN_ROOT="/"
 WITH_SBOM=0
-for arg in "$@"; do
-  case "$arg" in
+APP_NAME=""
+REPORT_ONLY_DIR=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
     --with-sbom) WITH_SBOM=1 ;;
+    --app-name|--report-only)
+      if [[ $# -lt 2 ]]; then echo "$1 needs a value" >&2; exit 2; fi
+      if [[ "$1" == "--app-name" ]]; then APP_NAME="$2"; else REPORT_ONLY_DIR="$2"; fi
+      shift
+      ;;
     -h|--help)
       grep '^#' "$0" | sed 's/^#//'
       exit 0
       ;;
-    *) SCAN_ROOT="$arg" ;;
+    *) SCAN_ROOT="$1" ;;
   esac
+  shift
 done
+
+# ---------------------------------------------------------------------------
+# HTML report (report.html)
+#
+# Rendered from the CSVs, so it can also be regenerated later with
+# --report-only. Self-contained: inline CSS, no scripts, no external assets.
+# Every value that came from a scanned file (paths, cert subjects, config
+# lines, aliases) is HTML-escaped — those strings are attacker-influenced
+# (anyone who can name a file or issue a cert controls them).
+# ---------------------------------------------------------------------------
+
+# Escape stdin for safe inclusion in HTML text.
+html_escape() {
+  sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g'
+}
+
+# Shared awk helpers: RFC4180 line parser (matches csv_field's quoting),
+# HTML escaping, and the per-table row classification / filter rules.
+AWK_COMMON='
+function he(s) {
+  gsub(/&/, "\\&amp;", s); gsub(/</, "\\&lt;", s)
+  gsub(/>/, "\\&gt;", s);  gsub(/"/, "\\&quot;", s)
+  return s
+}
+function parse(line, f,    n, i, c, inq, cur, len) {
+  split("", f); n = 0; cur = ""; inq = 0; len = length(line)
+  for (i = 1; i <= len; i++) {
+    c = substr(line, i, 1)
+    if (inq) {
+      if (c == "\"") {
+        if (substr(line, i + 1, 1) == "\"") { cur = cur "\""; i++ } else inq = 0
+      } else cur = cur c
+    } else if (c == "\"") inq = 1
+    else if (c == ",") { f[++n] = cur; cur = "" }
+    else cur = cur c
+  }
+  f[++n] = cur
+  return n
+}
+function isnum(x) { return x ~ /^-?[0-9]+$/ }
+function rowclass(mode, f,    d) {
+  if (mode == "certs")         { d = f[9]; if (isnum(d)) { if (d + 0 < 0) return "bad"; if (d + 0 <= 30) return "warn" } return "" }
+  if (mode == "keys")          return (f[6] == "yes") ? "bad" : ""
+  if (mode == "keystores")     return (f[9] == "password-unknown-manual-review") ? "warn" : ""
+  if (mode == "bad" || mode == "warn") return mode
+  return ""
+}
+function included(filter, f,    d) {
+  if (filter == "keys_world")    return f[6] == "yes"
+  if (filter == "ks_manual")     return f[9] == "password-unknown-manual-review"
+  if (filter == "cert_expiring") { d = f[9]; return isnum(d) && d + 0 >= 0 && d + 0 <= 90 }
+  return 1
+}
+'
+
+# data_lines FILE -> number of data rows (CSV minus header), 0 if missing
+data_lines() {
+  [[ -f "$1" ]] || { echo 0; return; }
+  awk 'END { print (NR > 1 ? NR - 1 : 0) }' "$1"
+}
+
+# count_rows FILE FILTER -> rows passing FILTER ("all" = every row)
+count_rows() {
+  [[ -f "$1" ]] || { echo 0; return; }
+  awk -v filter="$2" "$AWK_COMMON"'
+    NR > 1 { parse($0, f); if (included(filter, f)) c++ }
+    END { print c + 0 }' "$1"
+}
+
+# render_table FILE MODE FILTER MAX -> HTML table (or an empty-state note).
+# MODE picks the row-highlight rule (certs|keys|keystores|bad|warn|plain);
+# flagged rows also get a text Status cell so meaning never rests on color.
+render_table() {
+  local file="$1" mode="$2" filter="$3" max="$4"
+  if [[ ! -f "$file" ]]; then echo '<p class="empty">Not collected in this run.</p>'; return; fi
+  awk -v mode="$mode" -v filter="$filter" -v max="$max" "$AWK_COMMON"'
+    NR == 1 { hn = parse($0, h); next }
+    {
+      parse($0, f)
+      if (!included(filter, f)) next
+      total++
+      if (total > max) next
+      if (total == 1) {
+        print "<div class=\"tablewrap\"><table><thead><tr>"
+        if (mode != "plain") print "<th class=\"st\">Status</th>"
+        for (i = 1; i <= hn; i++) print "<th>" he(h[i]) "</th>"
+        print "</tr></thead><tbody>"
+      }
+      cls = rowclass(mode, f)
+      print "<tr" (cls != "" ? " class=\"" cls "\"" : "") ">"
+      if (mode != "plain") print "<td class=\"st\">" (cls == "bad" ? "ACTION" : (cls == "warn" ? "REVIEW" : "")) "</td>"
+      for (i = 1; i <= hn; i++) print "<td>" he(f[i]) "</td>"
+      print "</tr>"
+    }
+    END {
+      if (total == 0) print "<p class=\"empty\">None found.</p>"
+      else {
+        print "</tbody></table></div>"
+        if (total > max) print "<p class=\"note\">Showing the first " max " of " total " rows. See the CSV for the full list.</p>"
+      }
+    }' "$file"
+}
+
+# stat_card CLASS COUNT LABEL [CHIP] — CLASS is dropped when COUNT is 0
+stat_card() {
+  local cls="$1" n="$2" label="$3" chip="${4:-}"
+  [[ "$n" -eq 0 ]] && cls=""
+  printf '<div class="card %s"><div class="n">%s</div><div class="l">' "$cls" "$n"
+  [[ -n "$chip" ]] && printf '<span class="sev">%s</span>' "$chip"
+  printf '%s</div></div>\n' "$label"
+}
+
+generate_html_report() {
+  local d="$OUT_DIR" out="$OUT_DIR/report.html" max_rows=1000
+  local name host ts root ran_root
+  name=$(printf '%s' "${APP_NAME:-$HOST}" | html_escape)
+  host=$(printf '%s' "$HOST" | html_escape)
+  ts=$(printf '%s' "$TS" | html_escape)
+  root=$(printf '%s' "$SCAN_ROOT" | html_escape)
+  ran_root="yes"; [[ "${RUN_AS_ROOT:-1}" -eq 0 ]] && ran_root="no"
+
+  local n_certs n_keys n_ks n_ssh n_refs n_p11 n_rpm
+  n_certs=$(data_lines "$d/certificates.csv")
+  n_keys=$(data_lines "$d/private_keys_found.csv")
+  n_ks=$(data_lines "$d/java_keystores.csv")
+  n_ssh=$(data_lines "$d/ssh_keys.csv")
+  n_refs=$(data_lines "$d/config_references.csv")
+  n_p11=$(data_lines "$d/pkcs11_hsm_references.csv")
+  n_rpm=$(data_lines "$d/crypto_packages.csv")
+
+  local n_world n_exp n_weak n_manual n_soon action review banner_cls banner_msg
+  n_world=$(count_rows "$d/private_keys_found.csv" keys_world)
+  n_exp=$(data_lines "$d/expired_certificates.csv")
+  n_weak=$(data_lines "$d/weak_crypto_findings.csv")
+  n_manual=$(count_rows "$d/java_keystores.csv" ks_manual)
+  n_soon=$(count_rows "$d/certificates.csv" cert_expiring)
+  action=$(( n_world + n_exp + n_weak ))
+  review=$(( n_manual + n_soon ))
+  if (( action > 0 )); then
+    banner_cls="bad";  banner_msg="$action finding(s) need action and $review need review."
+  elif (( review > 0 )); then
+    banner_cls="warn"; banner_msg="No critical findings. $review item(s) need review."
+  else
+    banner_cls="ok";   banner_msg="No priority findings in the material this scan could see."
+  fi
+
+  {
+    printf '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">\n'
+    printf '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+    printf '<title>Crypto Inventory - %s</title>\n<style>\n' "$name"
+    cat <<'CSS'
+:root{--bg:#f7f8fa;--card:#fff;--text:#1b1f24;--muted:#5b6571;--line:#dde1e6;--bad:#b42318;--bad-bg:#fdecea;--warn:#8a5a00;--warn-bg:#fff4d6;--ok:#1a7f37;--ok-bg:#e6f4ea}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1318;--card:#171c23;--text:#e6e9ee;--muted:#9aa5b1;--line:#2a323c;--bad:#ff8a80;--bad-bg:#3a1d1b;--warn:#f5c064;--warn-bg:#3a2e12;--ok:#7ee2a0;--ok-bg:#16301f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1200px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}
+h2{font-size:16px;margin:28px 0 4px}
+.meta{color:var(--muted);margin:0 0 18px;overflow-wrap:anywhere}
+.sub{color:var(--muted);font-size:12px;margin:0 0 10px}
+.banner{padding:12px 14px;border-radius:8px;border:1px solid;margin-bottom:14px;font-weight:600}
+.banner.bad{background:var(--bad-bg);color:var(--bad);border-color:var(--bad)}
+.banner.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn)}
+.banner.ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.card .n{font-size:26px;font-weight:600;line-height:1.2}
+.card .l{color:var(--muted);font-size:12px}
+.card.bad{border-color:var(--bad)}.card.bad .n{color:var(--bad)}
+.card.warn{border-color:var(--warn)}.card.warn .n{color:var(--warn)}
+.sev{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:9px;margin-right:6px;border:1px solid currentColor}
+.tablewrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
+th,td{min-width:12ch}
+th.st,td.st{white-space:nowrap}
+th{background:var(--bg);color:var(--muted);font-weight:600;white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+tr.bad td{background:var(--bad-bg)}tr.bad td:first-child{color:var(--bad);font-weight:700}
+tr.warn td{background:var(--warn-bg)}tr.warn td:first-child{color:var(--warn);font-weight:700}
+details{margin:12px 0}
+summary{cursor:pointer;font-weight:600;padding:6px 0}
+.note,.empty{color:var(--muted);font-size:12px;margin:6px 0}
+pre{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow-x:auto;font-size:12px}
+ul{margin:6px 0;padding-left:20px}
+a{color:inherit}
+@media (max-width:600px){.wrap{padding:16px 16px 40px}}
+CSS
+    printf '</style></head><body><div class="wrap">\n'
+
+    printf '<h1>Cryptographic &amp; PKI inventory: %s</h1>\n' "$name"
+    printf '<p class="meta">Host %s &middot; scanned %s &middot; scan root <code>%s</code> &middot; ran as root: %s</p>\n' \
+      "$host" "$ts" "$root" "$ran_root"
+    [[ "$ran_root" == "no" ]] && printf '<p class="banner warn">Scan ran without root. Unreadable paths were skipped, so this inventory is incomplete.</p>\n'
+    printf '<div class="banner %s">%s</div>\n' "$banner_cls" "$banner_msg"
+
+    printf '<h2>Priority findings</h2>\n<div class="grid">\n'
+    stat_card bad  "$n_world"  "World-readable private keys" CRITICAL
+    stat_card bad  "$n_exp"    "Expired certificates" HIGH
+    stat_card bad  "$n_weak"   "Weak crypto (SHA-1/MD5, RSA &lt; 2048)" HIGH
+    stat_card warn "$n_manual" "Keystores needing manual review" MEDIUM
+    stat_card warn "$n_soon"   "Certificates expiring in 90 days" MEDIUM
+    printf '</div>\n'
+
+    printf '<h2>Inventory</h2>\n<div class="grid">\n'
+    stat_card "" "$n_certs" "Certificates"
+    stat_card "" "$n_keys"  "Private key files"
+    stat_card "" "$n_ks"    "Java keystore entries"
+    stat_card "" "$n_ssh"   "SSH keys"
+    stat_card "" "$n_refs"  "Config files referencing crypto"
+    stat_card "" "$n_p11"   "PKCS#11 / HSM references"
+    stat_card "" "$n_rpm"   "Crypto RPM packages"
+    printf '</div>\n'
+
+    printf '<h2>World-readable private keys</h2>\n<p class="sub">Any other local user can read these. Fix permissions first.</p>\n'
+    render_table "$d/private_keys_found.csv" keys keys_world "$max_rows"
+    printf '<h2>Expired certificates</h2>\n'
+    render_table "$d/expired_certificates.csv" bad all "$max_rows"
+    printf '<h2>Weak cryptography</h2>\n'
+    render_table "$d/weak_crypto_findings.csv" bad all "$max_rows"
+    printf '<h2>Certificates expiring within 90 days</h2>\n<p class="sub">Highlighted when 30 days or fewer remain.</p>\n'
+    render_table "$d/certificates.csv" certs cert_expiring "$max_rows"
+    printf '<h2>Keystores needing manual review</h2>\n<p class="sub">Password was not a known public default, so aliases were not listed. Get it from the owning team.</p>\n'
+    render_table "$d/java_keystores.csv" keystores ks_manual "$max_rows"
+
+    printf '<h2>Full inventory</h2>\n'
+    printf '<details><summary>Certificates (%s)</summary>\n' "$n_certs"
+    render_table "$d/certificates.csv" certs all "$max_rows"; printf '</details>\n'
+    printf '<details><summary>Private key files (%s)</summary>\n' "$n_keys"
+    render_table "$d/private_keys_found.csv" keys all "$max_rows"; printf '</details>\n'
+    printf '<details><summary>Java keystores (%s)</summary>\n' "$n_ks"
+    render_table "$d/java_keystores.csv" keystores all "$max_rows"; printf '</details>\n'
+    printf '<details><summary>SSH keys (%s)</summary>\n' "$n_ssh"
+    render_table "$d/ssh_keys.csv" plain all "$max_rows"; printf '</details>\n'
+    printf '<details><summary>Config references (%s)</summary>\n' "$n_refs"
+    render_table "$d/config_references.csv" plain all "$max_rows"; printf '</details>\n'
+    printf '<details><summary>PKCS#11 / HSM references (%s)</summary>\n' "$n_p11"
+    render_table "$d/pkcs11_hsm_references.csv" plain all "$max_rows"; printf '</details>\n'
+    printf '<details><summary>Crypto-relevant RPM packages (%s)</summary>\n' "$n_rpm"
+    render_table "$d/crypto_packages.csv" plain all "$max_rows"; printf '</details>\n'
+
+    printf '<h2>System crypto policy</h2>\n'
+    if [[ -f "$d/os_trust_and_policy.txt" ]]; then
+      printf '<pre>'; html_escape < "$d/os_trust_and_policy.txt"; printf '</pre>\n'
+    else
+      printf '<p class="empty">Not collected in this run.</p>\n'
+    fi
+
+    printf '<h2>SBOM / CBOM</h2>\n<ul>\n'
+    local pair fn lbl cnt
+    for pair in "sbom.cyclonedx.json|SBOM (CycloneDX)" "cbom.cyclonedx.json|CBOM (CycloneDX)"; do
+      fn="${pair%%|*}"; lbl="${pair#*|}"
+      if [[ -f "$d/$fn" ]]; then
+        cnt=""
+        if command -v jq >/dev/null 2>&1; then
+          local n; n=$(jq '.components | length' "$d/$fn" 2>/dev/null)
+          [[ "$n" =~ ^[0-9]+$ ]] && cnt=" &mdash; $n components"
+        fi
+        printf '<li><a href="%s">%s</a>%s</li>\n' "$fn" "$lbl" "$cnt"
+      else
+        printf '<li>%s: not generated. Run with <code>--with-sbom</code> (needs syft / cdxgen installed).</li>\n' "$lbl"
+      fi
+    done
+    printf '</ul>\n'
+
+    printf '<h2>What this scan cannot see</h2>\n<ul>\n'
+    printf '<li>Keys held inside an HSM or cloud KMS. Only PKCS#11 config and module references are found; pull the keys from the HSM/KMS admin API.</li>\n'
+    printf '<li>Keystores with a non-default password are listed but not opened.</li>\n'
+    printf '<li>Keys generated at runtime and never written to disk.</li>\n'
+    printf '<li>Algorithms used inside compiled or obfuscated JARs. Use the CBOM from <code>--with-sbom</code>.</li>\n'
+    printf '<li>Secrets in external vaults (HashiCorp Vault, AWS Secrets Manager, ...) that config only references by name.</li>\n'
+    printf '</ul>\n'
+
+    printf '<h2>Raw data</h2>\n<ul>\n'
+    local f
+    for f in certificates expired_certificates weak_crypto_findings private_keys_found java_keystores \
+             ssh_keys config_references pkcs11_hsm_references crypto_packages; do
+      [[ -f "$d/$f.csv" ]] && printf '<li><a href="%s.csv">%s.csv</a></li>\n' "$f" "$f"
+    done
+    printf '</ul>\n</div></body></html>\n'
+  } > "$out"
+}
+
+# --report-only: rebuild report.html from an earlier run's CSVs and stop.
+if [[ -n "$REPORT_ONLY_DIR" ]]; then
+  if [[ ! -d "$REPORT_ONLY_DIR" ]]; then echo "No such directory: $REPORT_ONLY_DIR" >&2; exit 2; fi
+  OUT_DIR="$(cd "$REPORT_ONLY_DIR" && pwd)"
+  meta() { sed -n "s/^$1: //p" "$OUT_DIR/summary.txt" 2>/dev/null | head -1; }
+  HOST="$(meta Host)";           HOST="${HOST:-unknown}"
+  TS="$(meta Timestamp)";        TS="${TS:-unknown}"
+  SCAN_ROOT="$(meta 'Scan root')"; SCAN_ROOT="${SCAN_ROOT:-unknown}"
+  RUN_AS_ROOT="$(meta 'Ran as root' | awk '{print $1}')"; RUN_AS_ROOT="${RUN_AS_ROOT:-1}"
+  generate_html_report
+  echo "HTML report: $OUT_DIR/report.html"
+  exit 0
+fi
 
 TS="$(date +%Y%m%d-%H%M%S)"
 HOST="$(hostname -s 2>/dev/null || hostname)"
@@ -560,6 +872,9 @@ fi
   echo "  5. Merge sbom.cyclonedx.json + cbom.cyclonedx.json (if generated)"
   echo "     with this CSV data into your CMDB/inventory system of record."
 } > "$SUMMARY"
+
+generate_html_report
+log "HTML report: $OUT_DIR/report.html"
 
 log "Done. Summary: $SUMMARY"
 echo
