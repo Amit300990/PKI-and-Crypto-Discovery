@@ -1,0 +1,5 @@
+path,type,file_perms,owner,group,world_readable
+"/opt/app/config/ssl/server.key","RSA",600,"appuser","appgroup",no
+"/opt/tomcat/conf/ssl/tomcat.key","RSA",640,"tomcat","tomcat",no
+"/etc/pki/tls/private/apache-selfsigned.key","RSA",644,"root","root",yes
+"/opt/app/legacy/backup/old_server.key","RSA",777,"appuser","appgroup",yes

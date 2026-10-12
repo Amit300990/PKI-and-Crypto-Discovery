@@ -1,0 +1,9 @@
+== update-crypto-policies ==
+DEFAULT
+
+== System trust (trust list, truncated to CA count) ==
+142
+
+== OpenSSL / NSS versions ==
+OpenSSL 1.1.1k  FIPS 25 Mar 2021
+nss-3.90.0-6.el8_9.x86_64

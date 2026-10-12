@@ -688,15 +688,15 @@ find "$SCAN_ROOT" \( "${PRUNE_EXPR[@]}" \) -prune -o \
     analyze_keystore "$f"
   done
 
-# JVM's own default cacerts, in case not caught above.
-# Parenthesized so -type d applies to BOTH alternatives in the -iname test —
-# without grouping, "-maxdepth 6 -type d -iname jre -o -type d -iname jdk*"
-# parses as two independently-scoped OR branches, which some find builds
-#(notably non-GNU ones) evaluate inconsistently with -maxdepth placement.
-find / -maxdepth 6 -type d \( -iname 'jre' -o -iname 'jdk*' \) -print0 2>/dev/null | \
-  while IFS= read -r -d '' jh; do
-    cac="$jh/lib/security/cacerts"
-    [[ -f "$cac" ]] && analyze_keystore "$cac"
+# JVM default trust stores. These have no file extension, so the loop above
+# can't see them. Match the file by name instead of by JDK directory name:
+# RHEL8 installs OpenJDK under /usr/lib/jvm/java-11-openjdk-<ver>/ (a name
+# that neither 'jre' nor 'jdk*' matches), and its real cacerts lives at
+# /etc/pki/java/cacerts, with the JDK copies being symlinks to it. -type f
+# skips those symlinks, so each store is analysed once.
+find "$SCAN_ROOT" \( "${PRUNE_EXPR[@]}" \) -prune -o \
+  -type f -name cacerts -print0 2>/dev/null | while IFS= read -r -d '' f; do
+    analyze_keystore "$f"
   done
 
 KS_COUNT=$(( $(wc -l < "$KEYSTORES_CSV") - 1 ))
@@ -743,7 +743,7 @@ log "  found $SSH_COUNT SSH keys"
 log "6/9 Scanning app config locations for crypto references"
 
 CONFIG_DIRS=(/etc /opt /u01 /app /srv /var/lib/tomcat* /usr/local)
-CONFIG_PATTERNS='javax\.net\.ssl\.(key|trust)Store|keystore\.(path|file)|-----BEGIN (CERTIFICATE|.*PRIVATE KEY)-----|ssl\.key-store|ssl\.trust-store|pkcs11|sunpkcs11|slotListIndex'
+CONFIG_PATTERNS='javax\.net\.ssl\.(key|trust)Store|keystore\.(path|file)|-----BEGIN (CERTIFICATE|.*PRIVATE KEY)-----|ssl\.key-store|ssl\.trust-store|pkcs11|sunpkcs11|slotListIndex|[Kk]eystoreFile|[Tt]ruststoreFile|SSLCertificateKeyFile'
 
 for d in "${CONFIG_DIRS[@]}"; do
   [[ -d "$d" ]] || continue
@@ -779,10 +779,12 @@ grep -rl 'pkcs11' /etc/pki 2>/dev/null | while read -r f; do
   printf '%s,%s,%s\n' "$(csv_field "$f")" "pkcs11-reference" "nss-or-openssl-config" >> "$PKCS11_CSV"
 done
 
-find / -maxdepth 6 -type d \( -iname 'jre' -o -iname 'jdk*' \) -print0 2>/dev/null | \
-  while IFS= read -r -d '' jh; do
-    secf="$jh/lib/security/java.security"
-    if [[ -f "$secf" ]] && grep -q 'SunPKCS11' "$secf" 2>/dev/null; then
+# java.security is lib/security/ on JDK 8 and conf/security/ on JDK 11+, so
+# find it by name. Only an ACTIVE provider line counts: stock files mention
+# SunPKCS11 in commented-out examples, which must not be reported.
+find "$SCAN_ROOT" \( "${PRUNE_EXPR[@]}" \) -prune -o \
+  -type f -name java.security -print0 2>/dev/null | while IFS= read -r -d '' secf; do
+    if grep -Eq '^[[:space:]]*security\.provider\.[0-9]+[[:space:]]*=.*SunPKCS11' "$secf" 2>/dev/null; then
       printf '%s,%s,%s\n' \
         "$(csv_field "$secf")" "java-sunpkcs11-provider" "SunPKCS11 registered in java.security" >> "$PKCS11_CSV"
     fi
@@ -815,8 +817,11 @@ if [[ $WITH_SBOM -eq 1 ]]; then
   fi
 
   if command -v cdxgen >/dev/null 2>&1; then
-    log "  running cdxgen (java) -> cbom.cyclonedx.json"
-    cdxgen -t java -o "$OUT_DIR/cbom.cyclonedx.json" "$SCAN_ROOT" 2>>"$OUT_DIR/cdxgen.log"
+    log "  running cdxgen (java, --include-crypto) -> cbom.cyclonedx.json"
+    # Without --include-crypto cdxgen emits a plain SBOM with no
+    # cryptographic-asset components. That component type also needs
+    # CycloneDX spec 1.6 or newer.
+    cdxgen -t java --include-crypto --spec-version 1.6 -o "$OUT_DIR/cbom.cyclonedx.json" "$SCAN_ROOT" 2>>"$OUT_DIR/cdxgen.log"
   else
     log "  cdxgen not found — skipping CBOM (install: npm i -g @cyclonedx/cdxgen)"
   fi

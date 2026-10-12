@@ -1,0 +1,5 @@
+config_file,matched_pattern,line_excerpt
+"/opt/app/config/application.properties",config-reference,"server.ssl.key-store=/opt/app/config/app-keystore.jks"
+"/opt/tomcat/conf/server.xml",config-reference,"  <Certificate certificateKeystoreFile=""/opt/tomcat/conf/keystore.p12"" certificateKeystorePassword=""***REDACTED***"" type=""RSA"" />"
+"/opt/legacy-app/conf/db.properties",config-reference,"javax.net.ssl.trustStore=/opt/legacy-app/conf/truststore.jks"
+"/opt/app/config/pkcs11.cfg",config-reference,"library = /usr/lib64/pkcs11/libsofthsm2.so"

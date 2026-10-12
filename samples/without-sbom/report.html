@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crypto Inventory - Orders Service (sample)</title>
+<style>
+:root{--bg:#f7f8fa;--card:#fff;--text:#1b1f24;--muted:#5b6571;--line:#dde1e6;--bad:#b42318;--bad-bg:#fdecea;--warn:#8a5a00;--warn-bg:#fff4d6;--ok:#1a7f37;--ok-bg:#e6f4ea}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1318;--card:#171c23;--text:#e6e9ee;--muted:#9aa5b1;--line:#2a323c;--bad:#ff8a80;--bad-bg:#3a1d1b;--warn:#f5c064;--warn-bg:#3a2e12;--ok:#7ee2a0;--ok-bg:#16301f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1200px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}
+h2{font-size:16px;margin:28px 0 4px}
+.meta{color:var(--muted);margin:0 0 18px;overflow-wrap:anywhere}
+.sub{color:var(--muted);font-size:12px;margin:0 0 10px}
+.banner{padding:12px 14px;border-radius:8px;border:1px solid;margin-bottom:14px;font-weight:600}
+.banner.bad{background:var(--bad-bg);color:var(--bad);border-color:var(--bad)}
+.banner.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn)}
+.banner.ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.card .n{font-size:26px;font-weight:600;line-height:1.2}
+.card .l{color:var(--muted);font-size:12px}
+.card.bad{border-color:var(--bad)}.card.bad .n{color:var(--bad)}
+.card.warn{border-color:var(--warn)}.card.warn .n{color:var(--warn)}
+.sev{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:9px;margin-right:6px;border:1px solid currentColor}
+.tablewrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
+th,td{min-width:12ch}
+th.st,td.st{white-space:nowrap}
+th{background:var(--bg);color:var(--muted);font-weight:600;white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+tr.bad td{background:var(--bad-bg)}tr.bad td:first-child{color:var(--bad);font-weight:700}
+tr.warn td{background:var(--warn-bg)}tr.warn td:first-child{color:var(--warn);font-weight:700}
+details{margin:12px 0}
+summary{cursor:pointer;font-weight:600;padding:6px 0}
+.note,.empty{color:var(--muted);font-size:12px;margin:6px 0}
+pre{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow-x:auto;font-size:12px}
+ul{margin:6px 0;padding-left:20px}
+a{color:inherit}
+@media (max-width:600px){.wrap{padding:16px 16px 40px}}
+</style></head><body><div class="wrap">
+<h1>Cryptographic &amp; PKI inventory: Orders Service (sample)</h1>
+<p class="meta">Host app-prod-01 &middot; scanned 20261013-091500 &middot; scan root <code>/</code> &middot; ran as root: yes</p>
+<div class="banner bad">7 finding(s) need action and 4 need review.</div>
+<h2>Priority findings</h2>
+<div class="grid">
+<div class="card bad"><div class="n">2</div><div class="l"><span class="sev">CRITICAL</span>World-readable private keys</div></div>
+<div class="card bad"><div class="n">2</div><div class="l"><span class="sev">HIGH</span>Expired certificates</div></div>
+<div class="card bad"><div class="n">3</div><div class="l"><span class="sev">HIGH</span>Weak crypto (SHA-1/MD5, RSA &lt; 2048)</div></div>
+<div class="card warn"><div class="n">2</div><div class="l"><span class="sev">MEDIUM</span>Keystores needing manual review</div></div>
+<div class="card warn"><div class="n">2</div><div class="l"><span class="sev">MEDIUM</span>Certificates expiring in 90 days</div></div>
+</div>
+<h2>Inventory</h2>
+<div class="grid">
+<div class="card "><div class="n">7</div><div class="l">Certificates</div></div>
+<div class="card "><div class="n">4</div><div class="l">Private key files</div></div>
+<div class="card "><div class="n">7</div><div class="l">Java keystore entries</div></div>
+<div class="card "><div class="n">5</div><div class="l">SSH keys</div></div>
+<div class="card "><div class="n">4</div><div class="l">Config files referencing crypto</div></div>
+<div class="card "><div class="n">5</div><div class="l">PKCS#11 / HSM references</div></div>
+<div class="card "><div class="n">11</div><div class="l">Crypto RPM packages</div></div>
+</div>
+<h2>World-readable private keys</h2>
+<p class="sub">Any other local user can read these. Fix permissions first.</p>
+<div class="tablewrap"><table><thead><tr>
+<th class="st">Status</th>
+<th>path</th>
+<th>type</th>
+<th>file_perms</th>
+<th>owner</th>
+<th>group</th>
+<th>world_readable</th>
+</tr></thead><tbody>
+<tr class="bad">
+<td class="st">ACTION</td>
+<td>/etc/pki/tls/private/apache-selfsigned.key</td>
+<td>RSA</td>
+<td>644</td>
+<td>root</td>
+<td>root</td>
+<td>yes</td>
+</tr>
+<tr class="bad">
+<td class="st">ACTION</td>
+<td>/opt/app/legacy/backup/old_server.key</td>
+<td>RSA</td>
+<td>777</td>
+<td>appuser</td>
+<td>appgroup</td>
+<td>yes</td>
+</tr>
+</tbody></table></div>
+<h2>Expired certificates</h2>
+<div class="tablewrap"><table><thead><tr>
+<th class="st">Status</th>
+<th>path</th>
+<th>not_after</th>
+<th>days_expired</th>
+</tr></thead><tbody>
+<tr class="bad">
+<td class="st">ACTION</td>
+<td>/etc/pki/ca-trust/source/anchors/old-partner-ca.pem</td>
+<td>Sep 30 12:00:00 2021 GMT</td>
+<td>1838</td>
+</tr>
+<tr class="bad">
+<td class="st">ACTION</td>
+<td>/etc/pki/tls/certs/apache-selfsigned.crt</td>
+<td>Jan 10 00:00:00 2026 GMT</td>
+<td>276</td>
+</tr>
+</tbody></table></div>
+<h2>Weak cryptography</h2>
+<div class="tablewrap"><table><thead><tr>
+<th class="st">Status</th>
+<th>path</th>
+<th>finding</th>
+</tr></thead><tbody>
+<tr class="bad">
+<td class="st">ACTION</td>
+<td>/etc/pki/ca-trust/source/anchors/old-partner-ca.pem</td>
+<td>weak-signature-hash:sha1WithRSAEncryption</td>
+</tr>
+<tr class="bad">
+<td class="st">ACTION</td>
+<td>/opt/legacy-app/certs/legacy-client.crt</td>
+<td>weak-signature-hash:sha1WithRSAEncryption; weak-key-size:1024bit</td>
+</tr>
+<tr class="bad">
+<td class="st">ACTION</td>
+<td>/opt/app/config/app-truststore.jks (alias=partner-legacy-ca)</td>
+<td>weak-signature-algorithm:SHA1withRSA</td>
+</tr>
+</tbody></table></div>
+<h2>Certificates expiring within 90 days</h2>
+<p class="sub">Highlighted when 30 days or fewer remain.</p>
+<div class="tablewrap"><table><thead><tr>
+<th class="st">Status</th>
+<th>type</th>
+<th>path</th>
+<th>subject</th>
+<th>issuer</th>
+<th>algorithm</th>
+<th>key_bits</th>
+<th>not_before</th>
+<th>not_after</th>
+<th>days_to_expiry</th>
+<th>self_signed</th>
+<th>sans</th>
+</tr></thead><tbody>
+<tr class="warn">
+<td class="st">REVIEW</td>
+<td>cert</td>
+<td>/opt/tomcat/conf/ssl/tomcat.crt</td>
+<td>O = Example Corp, CN = orders-svc.internal.corp</td>
+<td>O = Example Corp, CN = Example Corp Internal Root CA</td>
+<td>rsaEncryption</td>
+<td>2048</td>
+<td>Nov  2 00:00:00 2025 GMT</td>
+<td>Nov  2 23:59:59 2026 GMT</td>
+<td>20</td>
+<td>no</td>
+<td>DNS:orders-svc.internal.corp</td>
+</tr>
+<tr>
+<td class="st"></td>
+<td>cert</td>
+<td>/opt/legacy-app/certs/legacy-client.crt</td>
+<td>CN = legacy-client.internal.corp</td>
+<td>CN = Example Corp Legacy CA</td>
+<td>rsaEncryption</td>
+<td>1024</td>
+<td>Dec 15 00:00:00 2021 GMT</td>
+<td>Dec 15 23:59:59 2026 GMT</td>
+<td>63</td>
+<td>no</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h2>Keystores needing manual review</h2>
+<p class="sub">Password was not a known public default, so aliases were not listed. Get it from the owning team.</p>
+<div class="tablewrap"><table><thead><tr>
+<th class="st">Status</th>
+<th>path</th>
+<th>size_bytes</th>
+<th>file_perms</th>
+<th>owner</th>
+<th>alias</th>
+<th>alias_algorithm</th>
+<th>alias_key_bits</th>
+<th>alias_expiry</th>
+<th>password_status</th>
+</tr></thead><tbody>
+<tr class="warn">
+<td class="st">REVIEW</td>
+<td>/opt/tomcat/conf/keystore.p12</td>
+<td>3210</td>
+<td>600</td>
+<td>tomcat</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>password-unknown-manual-review</td>
+</tr>
+<tr class="warn">
+<td class="st">REVIEW</td>
+<td>/opt/legacy-app/wallet/oracle.jceks</td>
+<td>2048</td>
+<td>600</td>
+<td>oracle</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>password-unknown-manual-review</td>
+</tr>
+</tbody></table></div>
+<h2>Full inventory</h2>
+<details><summary>Certificates (7)</summary>
+<div class="tablewrap"><table><thead><tr>
+<th class="st">Status</th>
+<th>type</th>
+<th>path</th>
+<th>subject</th>
+<th>issuer</th>
+<th>algorithm</th>
+<th>key_bits</th>
+<th>not_before</th>
+<th>not_after</th>
+<th>days_to_expiry</th>
+<th>self_signed</th>
+<th>sans</th>
+</tr></thead><tbody>
+<tr>
+<td class="st"></td>
+<td>cert</td>
+<td>/etc/pki/ca-trust/source/anchors/corp-root-ca.pem</td>
+<td>O = Example Corp, CN = Example Corp Internal Root CA</td>
+<td>O = Example Corp, CN = Example Corp Internal Root CA</td>
+<td>rsaEncryption</td>
+<td>4096</td>
+<td>Mar  1 00:00:00 2021 GMT</td>
+<td>Mar  1 00:00:00 2031 GMT</td>
+<td>1599</td>
+<td>yes</td>
+<td></td>
+</tr>
+<tr class="bad">
+<td class="st">ACTION</td>
+<td>cert</td>
+<td>/etc/pki/ca-trust/source/anchors/old-partner-ca.pem</td>
+<td>CN = Partner Root CA 2016</td>
+<td>CN = Partner Root CA 2016</td>
+<td>rsaEncryption</td>
+<td>2048</td>
+<td>Sep 30 12:00:00 2016 GMT</td>
+<td>Sep 30 12:00:00 2021 GMT</td>
+<td>-1838</td>
+<td>yes</td>
+<td></td>
+</tr>
+<tr class="bad">
+<td class="st">ACTION</td>
+<td>cert</td>
+<td>/etc/pki/tls/certs/apache-selfsigned.crt</td>
+<td>CN = app-prod-01.internal.corp</td>
+<td>CN = app-prod-01.internal.corp</td>
+<td>rsaEncryption</td>
+<td>2048</td>
+<td>Jan 10 00:00:00 2024 GMT</td>
+<td>Jan 10 00:00:00 2026 GMT</td>
+<td>-276</td>
+<td>yes</td>
+<td>DNS:app-prod-01.internal.corp</td>
+</tr>
+<tr>
+<td class="st"></td>
+<td>cert</td>
+<td>/opt/app/config/ssl/server.crt</td>
+<td>O = Example Corp, CN = payments-api.example.com</td>
+<td>C = US, O = DigiCert Inc, CN = DigiCert TLS RSA SHA256 2020 CA1</td>
+<td>rsaEncryption</td>
+<td>2048</td>
+<td>Jun  1 00:00:00 2026 GMT</td>
+<td>Jun  1 23:59:59 2027 GMT</td>
+<td>231</td>
+<td>no</td>
+<td>DNS:payments-api.example.com, DNS:www.payments-api.example.com</td>
+</tr>
+<tr>
+<td class="st"></td>
+<td>cert</td>
+<td>/opt/app/config/ssl/client.der</td>
+<td>O = Example Corp, CN = orders-client</td>
+<td>O = Example Corp, CN = Example Corp Internal Root CA</td>
+<td>rsaEncryption</td>
+<td>2048</td>
+<td>Aug  1 00:00:00 2026 GMT</td>
+<td>Aug  1 23:59:59 2028 GMT</td>
+<td>658</td>
+<td>no</td>
+<td></td>
+</tr>
+<tr class="warn">
+<td class="st">REVIEW</td>
+<td>cert</td>
+<td>/opt/tomcat/conf/ssl/tomcat.crt</td>
+<td>O = Example Corp, CN = orders-svc.internal.corp</td>
+<td>O = Example Corp, CN = Example Corp Internal Root CA</td>
+<td>rsaEncryption</td>
+<td>2048</td>
+<td>Nov  2 00:00:00 2025 GMT</td>
+<td>Nov  2 23:59:59 2026 GMT</td>
+<td>20</td>
+<td>no</td>
+<td>DNS:orders-svc.internal.corp</td>
+</tr>
+<tr>
+<td class="st"></td>
+<td>cert</td>
+<td>/opt/legacy-app/certs/legacy-client.crt</td>
+<td>CN = legacy-client.internal.corp</td>
+<td>CN = Example Corp Legacy CA</td>
+<td>rsaEncryption</td>
+<td>1024</td>
+<td>Dec 15 00:00:00 2021 GMT</td>
+<td>Dec 15 23:59:59 2026 GMT</td>
+<td>63</td>
+<td>no</td>
+<td></td>
+</tr>
+</tbody></table></div>
+</details>
+<details><summary>Private key files (4)</summary>
+<div class="tablewrap"><table><thead><tr>
+<th class="st">Status</th>
+<th>path</th>
+<th>type</th>
+<th>file_perms</th>
+<th>owner</th>
+<th>group</th>
+<th>world_readable</th>
+</tr></thead><tbody>
+<tr>
+<td class="st"></td>
+<td>/opt/app/config/ssl/server.key</td>
+<td>RSA</td>
+<td>600</td>
+<td>appuser</td>
+<td>appgroup</td>
+<td>no</td>
+</tr>
+<tr>
+<td class="st"></td>
+<td>/opt/tomcat/conf/ssl/tomcat.key</td>
+<td>RSA</td>
+<td>640</td>
+<td>tomcat</td>
+<td>tomcat</td>
+<td>no</td>
+</tr>
+<tr class="bad">
+<td class="st">ACTION</td>
+<td>/etc/pki/tls/private/apache-selfsigned.key</td>
+<td>RSA</td>
+<td>644</td>
+<td>root</td>
+<td>root</td>
+<td>yes</td>
+</tr>
+<tr class="bad">
+<td class="st">ACTION</td>
+<td>/opt/app/legacy/backup/old_server.key</td>
+<td>RSA</td>
+<td>777</td>
+<td>appuser</td>
+<td>appgroup</td>
+<td>yes</td>
+</tr>
+</tbody></table></div>
+</details>
+<details><summary>Java keystores (7)</summary>
+<div class="tablewrap"><table><thead><tr>
+<th class="st">Status</th>
+<th>path</th>
+<th>size_bytes</th>
+<th>file_perms</th>
+<th>owner</th>
+<th>alias</th>
+<th>alias_algorithm</th>
+<th>alias_key_bits</th>
+<th>alias_expiry</th>
+<th>password_status</th>
+</tr></thead><tbody>
+<tr>
+<td class="st"></td>
+<td>/opt/app/config/app-keystore.jks</td>
+<td>4821</td>
+<td>640</td>
+<td>appuser</td>
+<td>app-tls</td>
+<td>SHA256withRSA</td>
+<td>unknown</td>
+<td>Tue Jun 01 23:59:59 GMT 2027</td>
+<td>known-password</td>
+</tr>
+<tr>
+<td class="st"></td>
+<td>/opt/app/config/app-truststore.jks</td>
+<td>3902</td>
+<td>640</td>
+<td>appuser</td>
+<td>corp-root-ca</td>
+<td>SHA256withRSA</td>
+<td>unknown</td>
+<td>Sat Mar 01 00:00:00 GMT 2031</td>
+<td>known-password</td>
+</tr>
+<tr>
+<td class="st"></td>
+<td>/opt/app/config/app-truststore.jks</td>
+<td>3902</td>
+<td>640</td>
+<td>appuser</td>
+<td>partner-legacy-ca</td>
+<td>SHA1withRSA</td>
+<td>unknown</td>
+<td>Thu Sep 30 12:00:00 GMT 2021</td>
+<td>known-password</td>
+</tr>
+<tr class="warn">
+<td class="st">REVIEW</td>
+<td>/opt/tomcat/conf/keystore.p12</td>
+<td>3210</td>
+<td>600</td>
+<td>tomcat</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>password-unknown-manual-review</td>
+</tr>
+<tr class="warn">
+<td class="st">REVIEW</td>
+<td>/opt/legacy-app/wallet/oracle.jceks</td>
+<td>2048</td>
+<td>600</td>
+<td>oracle</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>password-unknown-manual-review</td>
+</tr>
+<tr>
+<td class="st"></td>
+<td>/etc/pki/java/cacerts</td>
+<td>148230</td>
+<td>644</td>
+<td>root</td>
+<td>digicertglobalrootg2</td>
+<td>SHA384withRSA</td>
+<td>unknown</td>
+<td>Fri Jan 15 12:00:00 GMT 2038</td>
+<td>known-password</td>
+</tr>
+<tr>
+<td class="st"></td>
+<td>/etc/pki/java/cacerts</td>
+<td>148230</td>
+<td>644</td>
+<td>root</td>
+<td>isrgrootx1</td>
+<td>SHA256withRSA</td>
+<td>unknown</td>
+<td>Mon Jun 04 11:04:38 GMT 2035</td>
+<td>known-password</td>
+</tr>
+</tbody></table></div>
+</details>
+<details><summary>SSH keys (5)</summary>
+<div class="tablewrap"><table><thead><tr>
+<th>path</th>
+<th>type</th>
+<th>bits</th>
+<th>comment</th>
+<th>file_perms</th>
+<th>owner</th>
+</tr></thead><tbody>
+<tr>
+<td>/etc/ssh/ssh_host_rsa_key</td>
+<td>RSA</td>
+<td>3072</td>
+<td>root@app-prod-01</td>
+<td>600</td>
+<td>root</td>
+</tr>
+<tr>
+<td>/etc/ssh/ssh_host_ecdsa_key</td>
+<td>ECDSA</td>
+<td>256</td>
+<td>root@app-prod-01</td>
+<td>600</td>
+<td>root</td>
+</tr>
+<tr>
+<td>/etc/ssh/ssh_host_ed25519_key</td>
+<td>ED25519</td>
+<td>256</td>
+<td>root@app-prod-01</td>
+<td>600</td>
+<td>root</td>
+</tr>
+<tr>
+<td>/home/deployer/.ssh/id_rsa</td>
+<td>RSA</td>
+<td>2048</td>
+<td>deployer@jenkins-ci</td>
+<td>600</td>
+<td>deployer</td>
+</tr>
+<tr>
+<td>/root/.ssh/id_rsa</td>
+<td>unknown</td>
+<td>unknown</td>
+<td></td>
+<td>600</td>
+<td>root</td>
+</tr>
+</tbody></table></div>
+</details>
+<details><summary>Config references (4)</summary>
+<div class="tablewrap"><table><thead><tr>
+<th>config_file</th>
+<th>matched_pattern</th>
+<th>line_excerpt</th>
+</tr></thead><tbody>
+<tr>
+<td>/opt/app/config/application.properties</td>
+<td>config-reference</td>
+<td>server.ssl.key-store=/opt/app/config/app-keystore.jks</td>
+</tr>
+<tr>
+<td>/opt/tomcat/conf/server.xml</td>
+<td>config-reference</td>
+<td>  &lt;Certificate certificateKeystoreFile=&quot;/opt/tomcat/conf/keystore.p12&quot; certificateKeystorePassword=&quot;***REDACTED***&quot; type=&quot;RSA&quot; /&gt;</td>
+</tr>
+<tr>
+<td>/opt/legacy-app/conf/db.properties</td>
+<td>config-reference</td>
+<td>javax.net.ssl.trustStore=/opt/legacy-app/conf/truststore.jks</td>
+</tr>
+<tr>
+<td>/opt/app/config/pkcs11.cfg</td>
+<td>config-reference</td>
+<td>library = /usr/lib64/pkcs11/libsofthsm2.so</td>
+</tr>
+</tbody></table></div>
+</details>
+<details><summary>PKCS#11 / HSM references (5)</summary>
+<div class="tablewrap"><table><thead><tr>
+<th>path</th>
+<th>type</th>
+<th>notes</th>
+</tr></thead><tbody>
+<tr>
+<td>/etc/softhsm2.conf</td>
+<td>softhsm-or-pkcs11-config</td>
+<td>found-on-disk</td>
+</tr>
+<tr>
+<td>/usr/lib64/pkcs11/libsofthsm2.so</td>
+<td>pkcs11-module</td>
+<td>shared-object</td>
+</tr>
+<tr>
+<td>/usr/lib64/pkcs11/opensc-pkcs11.so</td>
+<td>pkcs11-module</td>
+<td>shared-object</td>
+</tr>
+<tr>
+<td>/etc/pki/nssdb/pkcs11.txt</td>
+<td>pkcs11-reference</td>
+<td>nss-or-openssl-config</td>
+</tr>
+<tr>
+<td>/opt/jdk-17.0.9/conf/security/java.security</td>
+<td>java-sunpkcs11-provider</td>
+<td>SunPKCS11 registered in java.security</td>
+</tr>
+</tbody></table></div>
+</details>
+<details><summary>Crypto-relevant RPM packages (11)</summary>
+<div class="tablewrap"><table><thead><tr>
+<th>package</th>
+<th>version</th>
+<th>arch</th>
+</tr></thead><tbody>
+<tr>
+<td>openssl</td>
+<td>1.1.1k-12.el8_9</td>
+<td>x86_64</td>
+</tr>
+<tr>
+<td>openssl-libs</td>
+<td>1.1.1k-12.el8_9</td>
+<td>x86_64</td>
+</tr>
+<tr>
+<td>openssl-pkcs11</td>
+<td>0.4.10-3.el8</td>
+<td>x86_64</td>
+</tr>
+<tr>
+<td>nss</td>
+<td>3.90.0-6.el8_9</td>
+<td>x86_64</td>
+</tr>
+<tr>
+<td>nss-util</td>
+<td>3.90.0-6.el8_9</td>
+<td>x86_64</td>
+</tr>
+<tr>
+<td>krb5-libs</td>
+<td>1.18.2-27.el8</td>
+<td>x86_64</td>
+</tr>
+<tr>
+<td>java-11-openjdk</td>
+<td>11.0.24.0.8-3.el8</td>
+<td>x86_64</td>
+</tr>
+<tr>
+<td>java-11-openjdk-headless</td>
+<td>11.0.24.0.8-3.el8</td>
+<td>x86_64</td>
+</tr>
+<tr>
+<td>gnupg2</td>
+<td>2.2.20-3.el8</td>
+<td>x86_64</td>
+</tr>
+<tr>
+<td>openssh</td>
+<td>8.0p1-19.el8_9.2</td>
+<td>x86_64</td>
+</tr>
+<tr>
+<td>openssh-server</td>
+<td>8.0p1-19.el8_9.2</td>
+<td>x86_64</td>
+</tr>
+</tbody></table></div>
+</details>
+<h2>System crypto policy</h2>
+<pre>== update-crypto-policies ==
+DEFAULT
+
+== System trust (trust list, truncated to CA count) ==
+142
+
+== OpenSSL / NSS versions ==
+OpenSSL 1.1.1k  FIPS 25 Mar 2021
+nss-3.90.0-6.el8_9.x86_64
+</pre>
+<h2>SBOM / CBOM</h2>
+<ul>
+<li>SBOM (CycloneDX): not generated. Run with <code>--with-sbom</code> (needs syft / cdxgen installed).</li>
+<li>CBOM (CycloneDX): not generated. Run with <code>--with-sbom</code> (needs syft / cdxgen installed).</li>
+</ul>
+<h2>What this scan cannot see</h2>
+<ul>
+<li>Keys held inside an HSM or cloud KMS. Only PKCS#11 config and module references are found; pull the keys from the HSM/KMS admin API.</li>
+<li>Keystores with a non-default password are listed but not opened.</li>
+<li>Keys generated at runtime and never written to disk.</li>
+<li>Algorithms used inside compiled or obfuscated JARs. Use the CBOM from <code>--with-sbom</code>.</li>
+<li>Secrets in external vaults (HashiCorp Vault, AWS Secrets Manager, ...) that config only references by name.</li>
+</ul>
+<h2>Raw data</h2>
+<ul>
+<li><a href="certificates.csv">certificates.csv</a></li>
+<li><a href="expired_certificates.csv">expired_certificates.csv</a></li>
+<li><a href="weak_crypto_findings.csv">weak_crypto_findings.csv</a></li>
+<li><a href="private_keys_found.csv">private_keys_found.csv</a></li>
+<li><a href="java_keystores.csv">java_keystores.csv</a></li>
+<li><a href="ssh_keys.csv">ssh_keys.csv</a></li>
+<li><a href="config_references.csv">config_references.csv</a></li>
+<li><a href="pkcs11_hsm_references.csv">pkcs11_hsm_references.csv</a></li>
+<li><a href="crypto_packages.csv">crypto_packages.csv</a></li>
+</ul>
+</div></body></html>

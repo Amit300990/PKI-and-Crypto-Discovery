@@ -1,0 +1,12 @@
+package,version,arch
+openssl,1.1.1k-12.el8_9,x86_64
+openssl-libs,1.1.1k-12.el8_9,x86_64
+openssl-pkcs11,0.4.10-3.el8,x86_64
+nss,3.90.0-6.el8_9,x86_64
+nss-util,3.90.0-6.el8_9,x86_64
+krb5-libs,1.18.2-27.el8,x86_64
+java-11-openjdk,11.0.24.0.8-3.el8,x86_64
+java-11-openjdk-headless,11.0.24.0.8-3.el8,x86_64
+gnupg2,2.2.20-3.el8,x86_64
+openssh,8.0p1-19.el8_9.2,x86_64
+openssh-server,8.0p1-19.el8_9.2,x86_64

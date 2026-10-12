@@ -1,0 +1,6 @@
+path,type,notes
+"/etc/softhsm2.conf",softhsm-or-pkcs11-config,found-on-disk
+"/usr/lib64/pkcs11/libsofthsm2.so",pkcs11-module,shared-object
+"/usr/lib64/pkcs11/opensc-pkcs11.so",pkcs11-module,shared-object
+"/etc/pki/nssdb/pkcs11.txt",pkcs11-reference,nss-or-openssl-config
+"/opt/jdk-17.0.9/conf/security/java.security",java-sunpkcs11-provider,SunPKCS11 registered in java.security

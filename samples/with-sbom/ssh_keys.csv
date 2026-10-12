@@ -1,0 +1,6 @@
+path,type,bits,comment,file_perms,owner
+"/etc/ssh/ssh_host_rsa_key",RSA,3072,"root@app-prod-01",600,"root"
+"/etc/ssh/ssh_host_ecdsa_key",ECDSA,256,"root@app-prod-01",600,"root"
+"/etc/ssh/ssh_host_ed25519_key",ED25519,256,"root@app-prod-01",600,"root"
+"/home/deployer/.ssh/id_rsa",RSA,2048,"deployer@jenkins-ci",600,"deployer"
+"/root/.ssh/id_rsa",unknown,unknown,"",600,"root"

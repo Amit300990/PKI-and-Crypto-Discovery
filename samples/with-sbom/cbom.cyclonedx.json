@@ -1,0 +1,121 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:00000000-0000-4000-8000-000000000002",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-10-13T09:24:05Z",
+    "component": { "type": "application", "name": "orders-svc", "version": "3.4.1" },
+    "tools": [ { "vendor": "cdxgen", "name": "cdxgen", "version": "10.9.0" } ]
+  },
+  "components": [
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto/algorithm/aes-256-gcm",
+      "name": "AES-256-GCM",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "ae",
+          "parameterSetIdentifier": "256",
+          "mode": "gcm",
+          "executionEnvironment": "software-plain-ram",
+          "cryptoFunctions": ["encrypt", "decrypt"]
+        },
+        "oid": "2.16.840.1.101.3.4.1.46"
+      },
+      "evidence": {
+        "occurrences": [
+          { "location": "src/main/java/com/example/orders/crypto/FieldEncryptor.java:42",
+            "line": 42 }
+        ]
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto/algorithm/rsa-2048-pkcs1",
+      "name": "RSA-2048",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "signature",
+          "parameterSetIdentifier": "2048",
+          "cryptoFunctions": ["sign", "verify"]
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          { "location": "src/main/java/com/example/orders/auth/TokenVerifier.java:88",
+            "line": 88 }
+        ]
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto/algorithm/md5-deprecated",
+      "name": "MD5",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "hash",
+          "cryptoFunctions": ["digest"]
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          { "location": "src/main/java/com/example/orders/legacy/CacheKeyGen.java:15",
+            "line": 15 }
+        ]
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto/certificate/orders-svc-tls",
+      "name": "orders-svc.internal.corp TLS cert",
+      "cryptoProperties": {
+        "assetType": "certificate",
+        "certificateProperties": {
+          "subjectName": "CN=orders-svc.internal.corp,O=Example Corp",
+          "issuerName": "CN=Example Corp Internal Root CA,O=Example Corp",
+          "notValidBefore": "2025-11-02T00:00:00Z",
+          "notValidAfter": "2026-11-02T23:59:59Z",
+          "signatureAlgorithmRef": "crypto/algorithm/rsa-2048-pkcs1",
+          "subjectPublicKeyRef": "crypto/key/orders-svc-tls-pubkey",
+          "certificateFormat": "X.509",
+          "certificateExtension": "crt"
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          { "location": "/opt/tomcat/conf/ssl/tomcat.crt" }
+        ]
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto/protocol/tls-1.2",
+      "name": "TLS 1.2",
+      "cryptoProperties": {
+        "assetType": "protocol",
+        "protocolProperties": {
+          "type": "tls",
+          "version": "1.2",
+          "cipherSuites": [
+            { "name": "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384" }
+          ]
+        }
+      },
+      "evidence": {
+        "occurrences": [
+          { "location": "/opt/tomcat/conf/server.xml" }
+        ]
+      }
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "crypto/certificate/orders-svc-tls",
+      "dependsOn": ["crypto/algorithm/rsa-2048-pkcs1"]
+    }
+  ]
+}

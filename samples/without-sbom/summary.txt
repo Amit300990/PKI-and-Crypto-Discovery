@@ -1,0 +1,43 @@
+Crypto/PKI Inventory Summary
+Host: app-prod-01
+Timestamp: 20261013-091500
+Scan root: /
+Ran as root: 1  (non-root scans WILL miss unreadable paths)
+
+Certificates found:        7   -> certificates.csv
+  weak-crypto flags:       3   -> weak_crypto_findings.csv (SHA1/MD5 sigs, RSA<2048)
+  already expired:         2   -> expired_certificates.csv
+Private key files found:   4    -> private_keys_found.csv
+Java keystore rows:        7     -> java_keystores.csv
+SSH keys found:            5    -> ssh_keys.csv
+Config references found:   4    -> config_references.csv (secrets redacted)
+PKCS#11/HSM references:    5 -> pkcs11_hsm_references.csv
+Crypto RPM packages:       11    -> crypto_packages.csv
+
+Known gaps this scan CANNOT close (require separate inventory):
+  - Keys actually resident inside an HSM or cloud KMS — this scan can
+    find PKCS#11 config/module references (pkcs11_hsm_references.csv)
+    but not the key material itself; pull that from the HSM/KMS's
+    own admin API/console.
+  - Keystores whose password isn't 'changeit'/'changeme'/blank are
+    listed but not opened — see java_keystores.csv rows marked
+    'password-unknown-manual-review'.
+  - Keys/secrets generated purely at runtime and never persisted to disk.
+  - Crypto algorithm usage embedded in compiled/obfuscated JARs not
+    caught by string-based scanning — run a proper SAST/CBOM code
+    scanner (e.g. cdxgen java plugin, IBM CBOMkit) with --with-sbom.
+  - Secrets stored in external vaults (HashiCorp Vault, AWS Secrets
+    Manager, etc.) referenced only by name/path in config.
+
+Next steps:
+  1. Review any world-readable private key in private_keys_found.csv
+     immediately — this is a standing finding, not just inventory.
+  2. Triage expired_certificates.csv and weak_crypto_findings.csv first —
+     both are pre-filtered, actionable lists.
+  3. For each 'password-unknown-manual-review' keystore, get the
+     password from the owning application team and re-run keytool
+     manually to extract alias/algorithm/expiry.
+  4. Cross-reference pkcs11_hsm_references.csv with your HSM/KMS
+     admin console to complete the key inventory for those assets.
+  5. Merge sbom.cyclonedx.json + cbom.cyclonedx.json (if generated)
+     with this CSV data into your CMDB/inventory system of record.

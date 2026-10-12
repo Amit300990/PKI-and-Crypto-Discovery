@@ -1,0 +1,4 @@
+path,finding
+"/etc/pki/ca-trust/source/anchors/old-partner-ca.pem","weak-signature-hash:sha1WithRSAEncryption"
+"/opt/legacy-app/certs/legacy-client.crt","weak-signature-hash:sha1WithRSAEncryption; weak-key-size:1024bit"
+"/opt/app/config/app-truststore.jks (alias=partner-legacy-ca)","weak-signature-algorithm:SHA1withRSA"

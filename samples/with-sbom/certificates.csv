@@ -1,0 +1,8 @@
+type,path,subject,issuer,algorithm,key_bits,not_before,not_after,days_to_expiry,self_signed,sans
+cert,"/etc/pki/ca-trust/source/anchors/corp-root-ca.pem","O = Example Corp, CN = Example Corp Internal Root CA","O = Example Corp, CN = Example Corp Internal Root CA","rsaEncryption",4096,"Mar  1 00:00:00 2021 GMT","Mar  1 00:00:00 2031 GMT",1599,"yes",""
+cert,"/etc/pki/ca-trust/source/anchors/old-partner-ca.pem","CN = Partner Root CA 2016","CN = Partner Root CA 2016","rsaEncryption",2048,"Sep 30 12:00:00 2016 GMT","Sep 30 12:00:00 2021 GMT",-1838,"yes",""
+cert,"/etc/pki/tls/certs/apache-selfsigned.crt","CN = app-prod-01.internal.corp","CN = app-prod-01.internal.corp","rsaEncryption",2048,"Jan 10 00:00:00 2024 GMT","Jan 10 00:00:00 2026 GMT",-276,"yes","DNS:app-prod-01.internal.corp"
+cert,"/opt/app/config/ssl/server.crt","O = Example Corp, CN = payments-api.example.com","C = US, O = DigiCert Inc, CN = DigiCert TLS RSA SHA256 2020 CA1","rsaEncryption",2048,"Jun  1 00:00:00 2026 GMT","Jun  1 23:59:59 2027 GMT",231,"no","DNS:payments-api.example.com, DNS:www.payments-api.example.com"
+cert,"/opt/app/config/ssl/client.der","O = Example Corp, CN = orders-client","O = Example Corp, CN = Example Corp Internal Root CA","rsaEncryption",2048,"Aug  1 00:00:00 2026 GMT","Aug  1 23:59:59 2028 GMT",658,"no",""
+cert,"/opt/tomcat/conf/ssl/tomcat.crt","O = Example Corp, CN = orders-svc.internal.corp","O = Example Corp, CN = Example Corp Internal Root CA","rsaEncryption",2048,"Nov  2 00:00:00 2025 GMT","Nov  2 23:59:59 2026 GMT",20,"no","DNS:orders-svc.internal.corp"
+cert,"/opt/legacy-app/certs/legacy-client.crt","CN = legacy-client.internal.corp","CN = Example Corp Legacy CA","rsaEncryption",1024,"Dec 15 00:00:00 2021 GMT","Dec 15 23:59:59 2026 GMT",63,"no",""
